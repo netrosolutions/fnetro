@@ -12,14 +12,14 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write        # to push tags and create releases
-      pull-requests: write   # to open changeset PR
-      id-token: write        # for npm provenance
+      contents: write        # push tags + create GitHub releases
+      pull-requests: write   # open Changesets version PR
+      id-token: write        # npm provenance attestation
 
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0     # full history for changeset
+          fetch-depth: 0     # full history required by Changesets
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -34,7 +34,7 @@ jobs:
       - name: Build all packages
         run: npm run build
 
-      - name: Create Release Pull Request or Publish
+      - name: Create Release Pull Request or Publish to npm
         uses: changesets/action@v1
         with:
           publish: npm run release

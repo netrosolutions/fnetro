@@ -680,7 +680,45 @@ function printNextSteps(projectName: string, answers: Answers): void {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  § 7  Main
+//  § 7  CLI flag parser — used for --ci mode
+// ══════════════════════════════════════════════════════════════════════════════
+
+interface CliFlags {
+  ci:         boolean
+  runtime:    Runtime  | undefined
+  template:   Template | undefined
+  pkgManager: PkgMgr   | undefined
+  noInstall:  boolean
+  noGit:      boolean
+}
+
+function parseFlags(argv: string[]): CliFlags {
+  const get = (flag: string): string | undefined => {
+    const idx = argv.indexOf(flag)
+    return idx !== -1 ? argv[idx + 1] : undefined
+  }
+  const has = (flag: string): boolean => argv.includes(flag)
+
+  const RUNTIMES:  Runtime[]  = ['node', 'bun', 'deno', 'cloudflare', 'generic']
+  const TEMPLATES: Template[] = ['minimal', 'full']
+  const MANAGERS:  PkgMgr[]   = ['npm', 'pnpm', 'yarn', 'bun', 'deno']
+
+  const runtimeArg    = get('--runtime')    as Runtime  | undefined
+  const templateArg   = get('--template')   as Template | undefined
+  const pkgManagerArg = (get('--pkg-manager') ?? get('--pkgManager')) as PkgMgr | undefined
+
+  return {
+    ci:         has('--ci') || process.env['CI'] === 'true',
+    runtime:    runtimeArg    && RUNTIMES.includes(runtimeArg)    ? runtimeArg    : undefined,
+    template:   templateArg   && TEMPLATES.includes(templateArg)  ? templateArg   : undefined,
+    pkgManager: pkgManagerArg && MANAGERS.includes(pkgManagerArg as PkgMgr) ? pkgManagerArg : undefined,
+    noInstall:  has('--no-install'),
+    noGit:      has('--no-git'),
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  § 8  Main
 // ══════════════════════════════════════════════════════════════════════════════
 
 async function main(): Promise<void> {
@@ -688,7 +726,45 @@ async function main(): Promise<void> {
 
   const argv    = process.argv.slice(2)
   const argName = argv.find((a) => !a.startsWith('--'))
+  const flags   = parseFlags(argv)
 
+  // ── CI / non-interactive mode ──────────────────────────────────────────────
+  // Activated by --ci flag or CI=true env var. Skips all prompts and uses
+  // flag values with sensible defaults. Used by GitHub Actions scaffold test.
+  if (flags.ci) {
+    const projectName = argName ?? 'my-fono-app'
+    const ciAnswers: Answers = {
+      projectName,
+      runtime:    flags.runtime    ?? 'node',
+      template:   flags.template   ?? 'minimal',
+      pkgManager: flags.pkgManager ?? 'npm',
+      installDeps: !flags.noInstall,
+      gitInit:     !flags.noGit,
+    }
+
+    const projectDir = resolve(process.cwd(), projectName)
+    mkdirSync(projectDir, { recursive: true })
+
+    console.log(`  Scaffolding ${bold(cyan(projectName))} [CI mode]…`)
+    console.log()
+    scaffold(projectDir, ciAnswers)
+
+    if (ciAnswers.installDeps) {
+      console.log(`  Installing with ${bold(ciAnswers.pkgManager)}…\n`)
+      try { runInstall(ciAnswers.pkgManager, projectDir) }
+      catch { console.log(yellow('\n  Install failed — run it manually.\n')) }
+    }
+
+    if (ciAnswers.gitInit) {
+      try { runGitInit(projectDir) } catch { /* git not available */ }
+    }
+
+    console.log(green('  Done! 🎉'))
+    printNextSteps(projectName, ciAnswers)
+    return
+  }
+
+  // ── Interactive mode ───────────────────────────────────────────────────────
   let cancelled = false
 
   const answers = await prompts(

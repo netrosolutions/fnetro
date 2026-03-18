@@ -39,11 +39,15 @@ jobs:
       - name: Build (create-fono)
         run: npm run build --workspace=packages/create-fono
 
-  # Quick smoke test: run create-fono and verify the output builds
+  # Scaffold smoke test: run create-fono in CI mode, verify files exist
   scaffold-test:
     name: Scaffold smoke test
     runs-on: ubuntu-latest
     needs: ci
+
+    strategy:
+      matrix:
+        template: [minimal, full]
 
     steps:
       - uses: actions/checkout@v4
@@ -57,18 +61,53 @@ jobs:
       - name: Install & build packages
         run: npm ci && npm run build
 
-      - name: Run create-fono (minimal, node)
+      - name: Scaffold ${{ matrix.template }} template
         run: |
           node packages/create-fono/dist/index.js test-app \
-            --runtime node --template minimal --pkgManager npm \
-            --no-install --no-git
-        env:
-          CI: true
+            --ci \
+            --runtime node \
+            --template ${{ matrix.template }} \
+            --pkg-manager npm \
+            --no-install \
+            --no-git
 
-      - name: Verify scaffold output exists
+      - name: Verify common scaffold files
         run: |
-          test -f test-app/server.ts
-          test -f test-app/client.ts
-          test -f test-app/app/layouts.tsx
-          test -f test-app/app/routes/home.tsx
-          echo "Scaffold files present ✓"
+          test -f test-app/server.ts        && echo "✓ server.ts"
+          test -f test-app/client.ts        && echo "✓ client.ts"
+          test -f test-app/tsconfig.json    && echo "✓ tsconfig.json"
+          test -f test-app/vite.config.ts   && echo "✓ vite.config.ts"
+          test -f test-app/package.json     && echo "✓ package.json"
+          test -f test-app/app/layouts.tsx  && echo "✓ app/layouts.tsx"
+          test -f test-app/app/routes/home.tsx  && echo "✓ app/routes/home.tsx"
+          test -f test-app/app/routes/about.tsx && echo "✓ app/routes/about.tsx"
+          test -f test-app/app/routes/api.ts    && echo "✓ app/routes/api.ts"
+
+      - name: Verify full template extras
+        if: matrix.template == 'full'
+        run: |
+          test -f test-app/app/store.ts                         && echo "✓ store.ts"
+          test -f test-app/app/routes/counter.tsx               && echo "✓ counter.tsx"
+          test -f test-app/app/routes/posts/index.tsx           && echo "✓ posts/index.tsx"
+          test -f "test-app/app/routes/posts/[slug].tsx"        && echo "✓ posts/[slug].tsx"
+
+      - name: Verify tsconfig in scaffolded app
+        run: |
+          node -e "
+            const t = JSON.parse(require('fs').readFileSync('test-app/tsconfig.json','utf8'))
+            const co = t.compilerOptions
+            if (co.jsxImportSource !== 'hono/jsx') throw new Error('jsxImportSource wrong: ' + co.jsxImportSource)
+            if (!co.strict) throw new Error('strict not enabled')
+            if (!co.allowImportingTsExtensions) throw new Error('allowImportingTsExtensions missing')
+            console.log('tsconfig valid ✓')
+          "
+
+      - name: Verify package.json in scaffolded app
+        run: |
+          node -e "
+            const p = JSON.parse(require('fs').readFileSync('test-app/package.json','utf8'))
+            if (!p.dependencies['@mdakashdeveloper/fono']) throw new Error('fono dep missing')
+            if (!p.scripts.build) throw new Error('build script missing')
+            if (!p.scripts.typecheck) throw new Error('typecheck script missing')
+            console.log('package.json valid ✓')
+          "
