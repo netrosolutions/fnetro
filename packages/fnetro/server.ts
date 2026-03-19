@@ -555,8 +555,9 @@ export function fnetroVitePlugin(opts: FNetroPluginOptions = {}): Plugin[] {
       order:   'pre',
       handler(id, importer, options) {
         const hook = _solidPlugins[0]?.resolveId
-        const handler = typeof hook === 'function' ? hook : hook?.handler
-        return handler?.call(this as any, id, importer, options)
+        if (!hook) return null
+        const handler = typeof hook === 'function' ? hook : hook.handler
+        return handler.call(this as any, id, importer, options)
       },
     },
 
@@ -564,8 +565,9 @@ export function fnetroVitePlugin(opts: FNetroPluginOptions = {}): Plugin[] {
       order:   'pre',
       handler(id, options) {
         const hook = _solidPlugins[0]?.load
-        const handler = typeof hook === 'function' ? hook : hook?.handler
-        return handler?.call(this as any, id, options)
+        if (!hook) return null
+        const handler = typeof hook === 'function' ? hook : hook.handler
+        return handler.call(this as any, id, options)
       },
     },
 
@@ -573,8 +575,9 @@ export function fnetroVitePlugin(opts: FNetroPluginOptions = {}): Plugin[] {
       order:   'pre',
       handler(code, id, options) {
         const hook = _solidPlugins[0]?.transform
-        const handler = typeof hook === 'function' ? hook : hook?.handler
-        return handler?.call(this as any, code, id, options)
+        if (!hook) return null
+        const handler = typeof hook === 'function' ? hook : hook.handler
+        return handler.call(this as any, code, id, options)
       },
     },
   }
