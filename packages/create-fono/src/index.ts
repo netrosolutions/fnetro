@@ -4,7 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { existsSync, mkdirSync, writeFileSync, readdirSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join, resolve, dirname } from 'node:path'
 import { execSync } from 'node:child_process'
 import prompts from 'prompts'
 import { bold, cyan, green, red, yellow, dim, magenta } from 'kolorist'
@@ -86,10 +86,9 @@ function isDirEmpty(dir: string): boolean {
   return items.length === 0 || (items.length === 1 && items[0] === '.git')
 }
 
-/** Write a file, creating all parent directories as needed. */
+/** Write a file, creating all parent directories as needed. Works on Windows and Unix. */
 function writeFile(filePath: string, content: string): void {
-  const dir = filePath.substring(0, filePath.lastIndexOf('/'))
-  if (dir) mkdirSync(dir, { recursive: true })
+  mkdirSync(dirname(filePath), { recursive: true })
   writeFileSync(filePath, content, 'utf-8')
 }
 
