@@ -66,7 +66,7 @@ function buildShell(opts: {
 <body>
 <div id="fnetro-app">${opts.pageHtml}</div>
 <script>window.${STATE_KEY}=${opts.stateJson};window.${PARAMS_KEY}=${opts.paramsJson};</script>
-<script type="module" src="/assets/client.js"></script>
+<script type="module" src="/client.ts"></script>
 </body>
 </html>`
 }

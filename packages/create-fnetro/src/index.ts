@@ -18,7 +18,7 @@ const CFG = {
   FNETRO_PKG: '@netrojs/fnetro',
 
   /** Scaffolded app's default fnetro dependency version */
-  FNETRO_VERSION: '^0.1.5',
+  FNETRO_VERSION: '^0.1.6',
 
   /** Hono peer dep version used in scaffolded apps */
   HONO_VERSION: '^4.12.8',
@@ -661,6 +661,7 @@ app/
     about.tsx        # GET /about
     api.ts           # GET /api/health, GET /api/hello
 public/
+assets/
   style.css
 vite.config.ts
 tsconfig.json
@@ -697,6 +698,7 @@ function scaffold(dir: string, answers: Answers): void {
   mkdirSync(join(dir, 'app/routes'), { recursive: true })
   mkdirSync(join(dir, 'app/components'), { recursive: true })
   mkdirSync(join(dir, 'public'), { recursive: true })
+  mkdirSync(join(dir, 'assets'), { recursive: true })
 
   // Root config files
   writeFile(join(dir, 'package.json'),   genPackageJson(answers.projectName, runtime))
@@ -722,7 +724,7 @@ function scaffold(dir: string, answers: Answers): void {
   writeFile(join(dir, 'app/routes/home.tsx'),  genHomeRoute())
   writeFile(join(dir, 'app/routes/about.tsx'), genAboutRoute())
   writeFile(join(dir, 'app/routes/api.ts'),    genApiRoute())
-  writeFile(join(dir, 'public/style.css'),     genAppCss())
+  writeFile(join(dir, 'assets/style.css'),     genAppCss())
 
   // Full template extras
   if (template === 'full') {

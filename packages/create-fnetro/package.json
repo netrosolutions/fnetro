@@ -1,6 +1,6 @@
 {
   "name": "@netrojs/create-fnetro",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Create a new FNetro app — SSR + SPA full-stack Hono framework",
   "type": "module",
   "license": "MIT",
