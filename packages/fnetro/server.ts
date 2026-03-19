@@ -6,6 +6,7 @@
 import { Hono } from 'hono'
 import { createComponent } from 'solid-js'
 import { renderToStringAsync, generateHydrationScript } from 'solid-js/web'
+import { ServerRouter } from '@solidjs/router'
 import {
   resolveRoutes, compilePath, matchPath,
   SPA_HEADER, STATE_KEY, PARAMS_KEY, SEO_KEY,
@@ -237,12 +238,19 @@ async function renderPage(
 
   return renderToStringAsync(() => {
     const pageEl = createComponent(route.page.Page as AnyComponent, { ...data, url, params })
-    if (!layout) return pageEl as any
 
-    return createComponent(layout.Component as AnyComponent, {
+    const content = layout
+      ? createComponent(layout.Component as AnyComponent, {
+          url,
+          params,
+          get children() { return pageEl },
+        }) as any
+      : pageEl as any
+
+    // Wrap in ServerRouter so hydration keys match the client-side <Router>
+    return createComponent(ServerRouter as AnyComponent, {
       url,
-      params,
-      get children() { return pageEl },
+      get children() { return content },
     }) as any
   })
 }
@@ -519,13 +527,15 @@ export function fnetroVitePlugin(opts: FNetroPluginOptions = {}): Plugin[] {
     enforce: 'pre',
 
     // Sync config hook — must return Omit<UserConfig, 'plugins'> | null
-    config(_cfg: UserConfig, _env: ConfigEnv): Omit<UserConfig, 'plugins'> | null {
+    // Note: Vite 6+ deprecated `esbuild.jsx`; Vite 8 uses `oxc` instead.
+    config(_cfg: UserConfig, env: ConfigEnv): Omit<UserConfig, 'plugins'> | null {
+      // oxc is the new JSX transform pipeline in Vite 8+
       return {
-        esbuild: {
+        oxc: {
           jsx:             'automatic',
           jsxImportSource: 'solid-js',
         },
-      }
+      } as any
     },
 
     async buildStart() {
@@ -589,6 +599,8 @@ export function fnetroVitePlugin(opts: FNetroPluginOptions = {}): Plugin[] {
               NODE_BUILTINS.test(id) ||
               id === '@hono/node-server' ||
               id === '@hono/node-server/serve-static' ||
+              id === '@solidjs/router' ||
+              id.startsWith('@solidjs/router/') ||
               serverExternal.includes(id),
           },
         },

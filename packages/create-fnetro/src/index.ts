@@ -16,8 +16,9 @@ import { bold, cyan, green, red, yellow, dim, magenta, blue } from 'kolorist'
 
 const CFG = {
   FNETRO_PKG:         '@netrojs/fnetro',
-  FNETRO_VERSION:     '^0.2.20',
+  FNETRO_VERSION:     '^0.2.21',
   SOLID_VERSION:      '^1.9.11',
+  SOLID_ROUTER_VERSION: '^0.15.3',
   HONO_VERSION:       '^4.12.8',
   VITE_VERSION:       '^8.0.1',
   VITE_SOLID_VERSION: '^2.11.11',
@@ -180,7 +181,7 @@ function genClientEntry(template: Template): string {
   const extraRoutes = template === 'full'
     ? `, counter, posts, postDetail` : ''
 
-  return `import { boot, useClientMiddleware } from '${pkg('client')}'
+  return `import { boot, useClientMiddleware, useNavigate, useParams, A } from '${pkg('client')}'
 import { RootLayout } from './app/layouts'
 import home from './app/routes/home'
 import about from './app/routes/about'
@@ -231,9 +232,8 @@ function genRootLayout(template: Template): string {
   return `import { defineLayout } from '${pkg('core')}'
 import { createSignal } from 'solid-js'
 
-const [mobileOpen, setMobileOpen] = createSignal(false)
-
 export const RootLayout = defineLayout(function RootLayout({ children, url }) {
+  const [mobileOpen, setMobileOpen] = createSignal(false)
   return (
     <div class="app">
       <nav class="nav">
@@ -308,7 +308,7 @@ export default definePage({
     title:       'About — FNetro',
     description: 'Learn about the FNetro framework — SolidJS + Hono.',
   },
-  loader: () => ({ version: '0.2.20' }),
+  loader: () => ({ version: '0.2.21' }),
   Page({ version }) {
     return (
       <div class="page">
@@ -339,7 +339,7 @@ function genApiRoute(): string {
 export const apiRoutes = defineApiRoute('/api', (app) => {
   // Health check
   app.get('/health', (c) =>
-    c.json({ status: 'ok', ts: Date.now(), version: '0.2.20' }),
+    c.json({ status: 'ok', ts: Date.now(), version: '0.2.21' }),
   )
 
   // Echo endpoint
@@ -574,6 +574,7 @@ function genPackageJson(name: string, runtime: Runtime): string {
   const deps: Record<string, string> = {
     [CFG.FNETRO_PKG]: CFG.FNETRO_VERSION,
     'solid-js':        CFG.SOLID_VERSION,
+    '@solidjs/router': CFG.SOLID_ROUTER_VERSION,
     hono:              CFG.HONO_VERSION,
   }
 
@@ -789,15 +790,14 @@ function genCounterRoute(): string {
   return `import { definePage } from '${pkg('core')}'
 import { createSignal, createMemo } from 'solid-js'
 
-// Module-level — persists across SPA navigations
-const [count, setCount] = createSignal(0)
-const doubled  = createMemo(() => count() * 2)
-const isEven   = createMemo(() => count() % 2 === 0)
-
 export default definePage({
   path: '/counter',
   seo: { title: 'Counter — FNetro', description: 'SolidJS signals demo.' },
   Page() {
+    // Signals declared inside the component — properly tracked by SolidJS
+    const [count, setCount] = createSignal(0)
+    const doubled  = createMemo(() => count() * 2)
+    const isEven   = createMemo(() => count() % 2 === 0)
     return (
       <div class="page">
         <h1>Counter</h1>

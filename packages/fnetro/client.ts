@@ -1,10 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  FNetro · client.ts
-//  SolidJS hydration · SPA routing · client middleware · SEO sync · prefetch
+//  SolidJS hydration · @solidjs/router SPA routing · client middleware · SEO
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { createSignal, createMemo, createComponent } from 'solid-js'
+import { createSignal, createComponent, lazy, Suspense } from 'solid-js'
 import { hydrate } from 'solid-js/web'
+import { Router, Route } from '@solidjs/router'
 import {
   resolveRoutes, compilePath, matchPath,
   SPA_HEADER, STATE_KEY, PARAMS_KEY, SEO_KEY,
@@ -30,20 +31,7 @@ function findRoute(pathname: string) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  § 2  Navigation state signal
-// ══════════════════════════════════════════════════════════════════════════════
-
-interface NavState {
-  path:   string
-  data:   Record<string, unknown>
-  params: Record<string, string>
-}
-
-// Populated by createAppRoot(); exposed so navigate() can update it.
-let _setNav: ((s: NavState) => void) | null = null
-
-// ══════════════════════════════════════════════════════════════════════════════
-//  § 3  Client middleware
+//  § 2  Client middleware
 // ══════════════════════════════════════════════════════════════════════════════
 
 const _mw: ClientMiddleware[] = []
@@ -76,7 +64,7 @@ async function runMiddleware(url: string, done: () => Promise<void>): Promise<vo
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  § 4  SEO — client-side <head> sync
+//  § 3  SEO — client-side <head> sync
 // ══════════════════════════════════════════════════════════════════════════════
 
 function setMeta(selector: string, attr: string, val: string | undefined): void {
@@ -91,7 +79,7 @@ function setMeta(selector: string, attr: string, val: string | undefined): void 
   el.setAttribute(attr, val)
 }
 
-function syncSEO(seo: SEOMeta): void {
+export function syncSEO(seo: SEOMeta): void {
   if (seo.title) document.title = seo.title
 
   setMeta('[name="description"]',        'content', seo.description)
@@ -124,7 +112,7 @@ function syncSEO(seo: SEOMeta): void {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  § 5  Prefetch cache
+//  § 4  Prefetch cache + SPA data fetching
 // ══════════════════════════════════════════════════════════════════════════════
 
 interface NavPayload {
@@ -136,7 +124,7 @@ interface NavPayload {
 
 const _cache = new Map<string, Promise<NavPayload>>()
 
-function fetchPayload(href: string): Promise<NavPayload> {
+export function fetchPayload(href: string): Promise<NavPayload> {
   if (!_cache.has(href)) {
     _cache.set(
       href,
@@ -150,37 +138,6 @@ function fetchPayload(href: string): Promise<NavPayload> {
   return _cache.get(href)!
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-//  § 6  navigate / prefetch
-// ══════════════════════════════════════════════════════════════════════════════
-
-export interface NavigateOptions {
-  replace?: boolean
-  scroll?:  boolean
-}
-
-export async function navigate(to: string, opts: NavigateOptions = {}): Promise<void> {
-  const u = new URL(to, location.origin)
-  if (u.origin !== location.origin) { location.href = to; return }
-  if (!findRoute(u.pathname))        { location.href = to; return }
-
-  await runMiddleware(u.pathname, async () => {
-    try {
-      const payload = await fetchPayload(u.toString())
-      history[opts.replace ? 'replaceState' : 'pushState'](
-        { url: u.pathname }, '', u.pathname,
-      )
-      if (opts.scroll !== false) window.scrollTo(0, 0)
-
-      _setNav?.({ path: u.pathname, data: payload.state ?? {}, params: payload.params ?? {} })
-      syncSEO(payload.seo ?? {})
-    } catch (err) {
-      console.error('[fnetro] Navigation error:', err)
-      location.href = to
-    }
-  })
-}
-
 /** Warm the prefetch cache for a URL on hover/focus/etc. */
 export function prefetch(url: string): void {
   try {
@@ -191,69 +148,107 @@ export function prefetch(url: string): void {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  § 7  DOM event intercepts
+//  § 5  Route components with data loading for @solidjs/router
 // ══════════════════════════════════════════════════════════════════════════════
 
-function onLinkClick(e: MouseEvent): void {
-  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
-  const a = e.composedPath().find(
-    (el): el is HTMLAnchorElement => el instanceof HTMLAnchorElement,
-  )
-  if (!a?.href) return
-  if (a.target && a.target !== '_self') return
-  if (a.hasAttribute('data-no-spa') || a.rel?.includes('external')) return
-  const u = new URL(a.href)
-  if (u.origin !== location.origin) return
-  e.preventDefault()
-  navigate(a.href)
-}
+/**
+ * Creates a solid-router-compatible route component that:
+ * 1. On first render: uses server-injected state (no network request)
+ * 2. On SPA navigation: fetches data from the FNetro server handler
+ */
+function makeRouteComponent(
+  route: ResolvedRoute,
+  appLayout: LayoutDef | undefined,
+  initialState: Record<string, unknown>,
+  initialParams: Record<string, string>,
+  initialSeo: SEOMeta,
+  prefetchOnHover: boolean,
+) {
+  // The component returned here is used as @solidjs/router's <Route component>
+  return function FNetroRouteComponent(routerProps: any) {
+    // routerProps.params comes from @solidjs/router's URL matching
+    const routeParams: Record<string, string> = routerProps.params ?? {}
+    const pathname: string = routerProps.location?.pathname ?? location.pathname
 
-function onLinkHover(e: MouseEvent): void {
-  const a = e.composedPath().find(
-    (el): el is HTMLAnchorElement => el instanceof HTMLAnchorElement,
-  )
-  if (a?.href) prefetch(a.href)
-}
+    // Determine the data source:
+    // - If this matches the server's initial state key, use it directly (no fetch needed on first load)
+    // - Otherwise fetch from the server via the SPA JSON endpoint
+    const serverData = initialState[pathname] as Record<string, unknown> | undefined
+    const [data, setData] = createSignal<Record<string, unknown>>(serverData ?? {})
+    const [params, setParams] = createSignal<Record<string, string>>(serverData ? initialParams : routeParams)
 
-function onPopState(): void {
-  navigate(location.href, { replace: true, scroll: false })
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-//  § 8  App root component (created inside hydrate's reactive owner)
-// ══════════════════════════════════════════════════════════════════════════════
-
-function AppRoot(props: { initial: NavState; appLayout: LayoutDef | undefined }): any {
-  const [nav, setNav] = createSignal<NavState>(props.initial)
-  // Expose setter so navigate() can trigger re-renders
-  _setNav = setNav
-
-  const view = createMemo(() => {
-    const { path, data, params } = nav()
-    const m = findRoute(path)
-
-    if (!m) {
-      // No match client-side — shouldn't happen but handle gracefully
-      return null as any
+    // Load data if we don't have it yet from the server
+    if (!serverData) {
+      const url = new URL(pathname, location.origin).toString()
+      fetchPayload(url).then(payload => {
+        setData(payload.state ?? {})
+        setParams(payload.params ?? {})
+        syncSEO(payload.seo ?? {})
+      }).catch(err => {
+        console.error('[fnetro] Failed to load route data:', err)
+      })
+    } else {
+      // Sync SEO for the initial page from server-injected data
+      syncSEO(initialSeo)
     }
 
-    const layout = m.route.layout !== undefined ? m.route.layout : props.appLayout
-    const pageEl = createComponent(m.route.page.Page as any, { ...data, url: path, params })
+    // Render the page (and optional layout wrapper)
+    const layout = route.layout !== undefined ? route.layout : appLayout
 
-    if (!layout) return pageEl
+    const pageEl = () => createComponent(route.page.Page as any, {
+      ...data(),
+      url: pathname,
+      params: params(),
+    })
+
+    if (!layout) return pageEl()
 
     return createComponent(layout.Component as any, {
-      url: path,
-      params,
-      get children() { return pageEl },
+      url: pathname,
+      params: params(),
+      get children() { return pageEl() },
     })
-  })
-
-  return view
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  § 9  boot()
+//  § 6  navigate / prefetch (convenience exports, wraps solid-router navigate)
+// ══════════════════════════════════════════════════════════════════════════════
+
+export interface NavigateOptions {
+  replace?: boolean
+  scroll?:  boolean
+}
+
+/**
+ * Programmatic navigation — delegates to history API and triggers
+ * @solidjs/router's reactive location update.
+ */
+export async function navigate(to: string, opts: NavigateOptions = {}): Promise<void> {
+  const u = new URL(to, location.origin)
+  if (u.origin !== location.origin) { location.href = to; return }
+  if (!findRoute(u.pathname))        { location.href = to; return }
+
+  await runMiddleware(u.pathname, async () => {
+    try {
+      // Prefetch/cache the payload so the route component can use it
+      const payload = await fetchPayload(u.toString())
+      history[opts.replace ? 'replaceState' : 'pushState'](
+        { url: u.pathname }, '', u.pathname,
+      )
+      if (opts.scroll !== false) window.scrollTo(0, 0)
+      syncSEO(payload.seo ?? {})
+      // Dispatch a popstate-like event so @solidjs/router's location signal updates
+      window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }))
+    } catch (err) {
+      console.error('[fnetro] Navigation error:', err)
+      location.href = to
+    }
+  })
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  § 7  boot()
 // ══════════════════════════════════════════════════════════════════════════════
 
 export interface BootOptions extends AppConfig {
@@ -281,37 +276,50 @@ export async function boot(options: BootOptions): Promise<void> {
   const paramsMap = (window as any)[PARAMS_KEY] as Record<string, string>                  ?? {}
   const seoData   = (window as any)[SEO_KEY]    as SEOMeta                                 ?? {}
 
-  const initial: NavState = {
-    path:   pathname,
-    data:   stateMap[pathname] ?? {},
-    params: paramsMap,
-  }
-
   const container = document.getElementById('fnetro-app')
   if (!container) {
     console.error('[fnetro] #fnetro-app not found — aborting hydration')
     return
   }
 
-  // Sync initial SEO (document.title etc.)
-  syncSEO(seoData)
+  const prefetchOnHover = options.prefetchOnHover !== false
 
-  // Hydrate the server-rendered HTML with SolidJS
+  // Build @solidjs/router <Route> elements for each resolved page
+  const routeElements = pages.map(route =>
+    createComponent(Route, {
+      path: route.fullPath,
+      component: makeRouteComponent(
+        route,
+        _appLayout,
+        stateMap,
+        paramsMap,
+        seoData,
+        prefetchOnHover,
+      ),
+    }) as any
+  )
+
+  // Hydrate with @solidjs/router wrapping all routes
   hydrate(
-    () => createComponent(AppRoot as any, { initial, appLayout: _appLayout }) as any,
+    () => createComponent(Router as any, {
+      get children() { return routeElements },
+    }) as any,
     container,
   )
 
-  // Wire up SPA navigation
-  document.addEventListener('click', onLinkClick)
-  if (options.prefetchOnHover !== false) {
-    document.addEventListener('mouseover', onLinkHover)
+  // Hover prefetch
+  if (prefetchOnHover) {
+    document.addEventListener('mouseover', (e: MouseEvent) => {
+      const a = e.composedPath().find(
+        (el): el is HTMLAnchorElement => el instanceof HTMLAnchorElement,
+      )
+      if (a?.href) prefetch(a.href)
+    })
   }
-  window.addEventListener('popstate', onPopState)
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  § 10  Re-exports
+//  § 8  Re-exports
 // ══════════════════════════════════════════════════════════════════════════════
 
 export {
@@ -325,3 +333,6 @@ export type {
   PageProps, LayoutProps, SEOMeta, HonoMiddleware, LoaderCtx,
   ResolvedRoute, CompiledPath, ClientMiddleware,
 } from './core'
+
+// Re-export solid-router primitives for convenience
+export { useNavigate, useParams, useLocation, A, useSearchParams } from '@solidjs/router'

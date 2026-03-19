@@ -6,6 +6,7 @@ const external = [
   'solid-js/web',
   'solid-js/store',
   'solid-js/universal',
+  '@solidjs/router',
   'hono',
   'hono/jsx',
   'hono/jsx/dom',
