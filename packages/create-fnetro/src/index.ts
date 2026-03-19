@@ -16,7 +16,7 @@ import { bold, cyan, green, red, yellow, dim, magenta, blue } from 'kolorist'
 
 const CFG = {
   FNETRO_PKG:         '@netrojs/fnetro',
-  FNETRO_VERSION:     '^0.2.1',
+  FNETRO_VERSION:     '^0.2.2',
   SOLID_VERSION:      '^1.9.11',
   HONO_VERSION:       '^4.12.8',
   VITE_VERSION:       '^8.0.1',
@@ -184,7 +184,9 @@ function genClientEntry(template: Template): string {
 import { RootLayout } from './app/layouts'
 import home from './app/routes/home'
 import about from './app/routes/about'
-${extraImports}
+${extraImports}// CSS is imported here so Vite handles it in both dev (HMR) and production
+// (bundled + hashed into manifest.json for server-side injection).
+import './app/style.css'
 // ── Client middleware ─────────────────────────────────────────────────────────
 // Runs before every SPA navigation.  Must be registered before boot().
 // Examples:
@@ -306,7 +308,7 @@ export default definePage({
     title:       'About — FNetro',
     description: 'Learn about the FNetro framework — SolidJS + Hono.',
   },
-  loader: () => ({ version: '0.2.1' }),
+  loader: () => ({ version: '0.2.2' }),
   Page({ version }) {
     return (
       <div class="page">
@@ -337,7 +339,7 @@ function genApiRoute(): string {
 export const apiRoutes = defineApiRoute('/api', (app) => {
   // Health check
   app.get('/health', (c) =>
-    c.json({ status: 'ok', ts: Date.now(), version: '0.2.1' }),
+    c.json({ status: 'ok', ts: Date.now(), version: '0.2.2' }),
   )
 
   // Echo endpoint
@@ -355,7 +357,7 @@ export const apiRoutes = defineApiRoute('/api', (app) => {
 `
 }
 
-// ── public/style.css ──────────────────────────────────────────────────────────
+// ── app/style.css ─────────────────────────────────────────────────────────────
 
 function genAppCss(): string {
   return `/* ── Reset ──────────────────────────────────────────────────────────────── */
@@ -715,12 +717,13 @@ server.ts           # Production entry — calls serve()
 client.ts           # Browser entry — calls boot()
 app/
   layouts.tsx       # Root layout (nav, footer)
+  style.css         # Global styles (imported by client.ts, processed by Vite)
   routes/
     home.tsx        # GET /
     about.tsx       # GET /about
     api.ts          # GET /api/health, /api/hello
 public/
-  style.css         # Global styles
+  favicon.ico       # Static assets served as-is (favicon, robots.txt, etc.)
 vite.config.ts
 tsconfig.json
 \`\`\`
@@ -962,7 +965,7 @@ function scaffold(dir: string, a: Answers): void {
   write(join(dir, 'app/routes/home.tsx'),  genHomeRoute())
   write(join(dir, 'app/routes/about.tsx'), genAboutRoute())
   write(join(dir, 'app/routes/api.ts'),    genApiRoute())
-  write(join(dir, 'public/style.css'),     genAppCss())
+  write(join(dir, 'app/style.css'),      genAppCss())
 
   // Full template extras
   if (template === 'full') {

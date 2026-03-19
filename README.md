@@ -575,7 +575,12 @@ createFNetro({
 })
 ```
 
-**Public directory** — static files in `public/` (images, fonts, `robots.txt`, `favicon.ico`) are served at `/` by the Node.js `serve()` helper automatically.
+**Public directory** — truly static files in `public/` (favicon, `robots.txt`, images that don't need processing) are served as-is at `/` by the Node.js `serve()` helper. CSS and JS that need Vite processing (HMR, bundling, hashing) must be **imported from JavaScript** — put them in `app/` and import from `client.ts`.
+
+```ts
+// client.ts — CSS imported here so Vite handles it in dev (HMR) and prod (bundle)
+import './app/style.css'
+```
 
 ---
 
@@ -664,6 +669,7 @@ my-app/
 │
 ├── app/
 │   ├── layouts.tsx     # defineLayout() — root shell (nav, footer)
+│   ├── style.css       # Global CSS — imported by client.ts, processed by Vite
 │   └── routes/
 │       ├── home.tsx    # definePage({ path: '/' })
 │       ├── about.tsx   # definePage({ path: '/about' })
@@ -673,8 +679,7 @@ my-app/
 │           └── [slug].tsx      # /posts/:slug
 │
 ├── public/
-│   ├── style.css       # Global CSS (served at /style.css)
-│   └── favicon.ico
+│   └── favicon.ico     # Truly static assets (favicon, robots.txt, etc.)
 │
 ├── vite.config.ts
 ├── tsconfig.json
@@ -769,10 +774,10 @@ npm create @netrojs/fnetro@latest my-app \
 ```
 app.ts  server.ts  client.ts
 app/layouts.tsx
+app/style.css               # Imported by client.ts — Vite bundles + HMR
 app/routes/home.tsx     # GET /
 app/routes/about.tsx    # GET /about
 app/routes/api.ts       # GET /api/health  GET /api/hello
-public/style.css
 ```
 
 **`full`** — includes SolidJS signal demo, dynamic routes, and shared store:

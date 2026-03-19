@@ -382,13 +382,16 @@ export function createFNetro(config: FNetroOptions): FNetroApp {
       })
     }
 
-    // Full SSR — assets resolved once per process lifetime
+    // Full SSR — resolve assets
+    // Dev:  inject the client entry as a module script.  Vite intercepts the
+    //       request, applies the SolidJS transform, and injects HMR.
+    //       @hono/vite-dev-server only adds /@vite/client — it does NOT add
+    //       your app's client.ts, so we must do it here.
+    // Prod: read hashed filenames from the Vite manifest.
+    const clientEntry = config.assets?.manifestEntry ?? 'client.ts'
     const assets = isDev
-      ? { scripts: [], styles: [] }  // Vite dev server injects assets
-      : await resolveAssets(
-          config.assets ?? {},
-          config.assets?.manifestEntry ?? 'client.ts',
-        )
+      ? { scripts: [`/${clientEntry}`], styles: [] }
+      : await resolveAssets(config.assets ?? {}, clientEntry)
 
     const html = await renderFullPage(route, data, pathname, params, config, assets)
     return c.html(html)

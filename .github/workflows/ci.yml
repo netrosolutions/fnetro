@@ -95,7 +95,7 @@ jobs:
             app.ts server.ts client.ts
             tsconfig.json vite.config.ts package.json
             .gitignore .env.example README.md
-            public/style.css
+            app/style.css
             app/layouts.tsx
             app/routes/home.tsx
             app/routes/about.tsx
