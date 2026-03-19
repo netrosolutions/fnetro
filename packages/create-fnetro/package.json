@@ -1,6 +1,6 @@
 {
   "name": "@netrojs/create-fnetro",
-  "version": "0.2.0",
+  "version": "0.2.2.1",
   "description": "Create a new FNetro app — SolidJS SSR + SPA full-stack Hono framework",
   "type": "module",
   "license": "MIT",

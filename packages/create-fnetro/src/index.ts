@@ -16,7 +16,7 @@ import { bold, cyan, green, red, yellow, dim, magenta, blue } from 'kolorist'
 
 const CFG = {
   FNETRO_PKG:         '@netrojs/fnetro',
-  FNETRO_VERSION:     '^0.2.0',
+  FNETRO_VERSION:     '^0.2.2.1',
   SOLID_VERSION:      '^1.9.11',
   HONO_VERSION:       '^4.12.8',
   VITE_VERSION:       '^8.0.1',
@@ -308,7 +308,7 @@ export default definePage({
     title:       'About — FNetro',
     description: 'Learn about the FNetro framework — SolidJS + Hono.',
   },
-  loader: () => ({ version: '0.2.0' }),
+  loader: () => ({ version: '0.2.2.1' }),
   Page({ version }) {
     return (
       <div class="page">
@@ -339,7 +339,7 @@ function genApiRoute(): string {
 export const apiRoutes = defineApiRoute('/api', (app) => {
   // Health check
   app.get('/health', (c) =>
-    c.json({ status: 'ok', ts: Date.now(), version: '0.2.0' }),
+    c.json({ status: 'ok', ts: Date.now(), version: '0.2.2.1' }),
   )
 
   // Echo endpoint
