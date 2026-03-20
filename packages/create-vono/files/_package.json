@@ -1,12 +1,12 @@
 {
   "name":    "{{PROJECT_NAME}}",
-  "version": "0.1.1",
+  "version": "0.0.1",
   "type":    "module",
   "private": true,
   "scripts": {
     "dev":       "{{DEV_CMD}}",
     "build":     "{{BUILD_CMD}}",
-    "start":     "node dist/server/server.js",
+    "start":     "{{START_CMD}}",
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {

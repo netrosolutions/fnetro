@@ -32,7 +32,10 @@ export default defineConfig({
     }),
 
     // Routes all dev-mode requests through the Vono Hono app (app.ts default export)
-    devServer({ entry: 'app.ts' }),
+    // injectClientScript: false — Vono injects the client script itself
+    // via buildShellParts(); letting the dev server inject a second copy
+    // causes a double-hydration error.
+    devServer({ entry: 'app.ts', injectClientScript: false }),
   ],
 
   server: {

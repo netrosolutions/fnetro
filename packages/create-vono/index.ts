@@ -123,11 +123,18 @@ function scaffold(dir: string, a: Answers): void {
     deno: 'deno run -A npm:vite build',
   }
 
+  const startCmds: Record<Runtime, string> = {
+    node: 'node dist/server/server.js',
+    bun:  'bun dist/server/server.js',
+    deno: 'deno run -A dist/server/server.js',
+  }
+
   const vars: Record<string, string> = {
-    PROJECT_NAME:    a.projectName,
+    PROJECT_NAME: a.projectName,
     VONO_VERSION,
-    DEV_CMD:         devCmds[a.runtime],
-    BUILD_CMD:       buildCmds[a.runtime],
+    DEV_CMD:      devCmds[a.runtime],
+    BUILD_CMD:    buildCmds[a.runtime],
+    START_CMD:    startCmds[a.runtime],
   }
 
   mkdirSync(dir, { recursive: true })

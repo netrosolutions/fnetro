@@ -192,13 +192,37 @@ async function resolveComponent(comp: Component | ((...a: unknown[]) => unknown)
  * against the correct route and never emits a spurious
  * "[Vue Router warn]: No match found for location with path '/'" warning.
  */
+/**
+ * Builds a fresh Vue SSR app + router per request and renders the page body.
+ *
+ * DEV MODE  — returns a `string` via `renderToString`.
+ *   `@hono/vite-dev-server` proxies requests through Vite's Connect middleware
+ *   pipeline.  That pipeline does not flush a `ReadableStream` — the browser
+ *   hangs waiting for bytes that never arrive, then reports
+ *   "localhost refused to connect" after the idle timeout fires.
+ *   `renderToString` buffers the full HTML and returns it as a plain string
+ *   which Hono serialises to a normal HTTP response — no streaming needed.
+ *
+ * PRODUCTION — returns a `ReadableStream<Uint8Array>` via `renderToWebStream`.
+ *   Lower TTFB: the browser receives `<head>` (CSS links, preload hints,
+ *   critical scripts) while Vue is still rendering the `<body>`.
+ *
+ * Vue Router warning fix:
+ *   `createMemoryHistory()` starts at '/'.  The router performs an internal
+ *   startup navigation to that initial location before any routes are matched.
+ *   If the only registered route is e.g. '/about', Vue Router emits:
+ *     "[Vue Router warn]: No match found for location with path '/'"
+ *   Fix: call `memHistory.replace(url)` BEFORE constructing the router so its
+ *   startup navigation always resolves against the correct, matched route.
+ */
 async function renderPage(
   route:     ResolvedRoute,
   data:      object,
   url:       string,
   params:    Record<string, string>,
   appLayout: LayoutDef | undefined,
-): Promise<ReadableStream<Uint8Array>> {
+  dev:       boolean,
+): Promise<ReadableStream<Uint8Array> | string> {
   const layout = route.layout !== undefined ? route.layout : appLayout
 
   // Resolve async component loaders — critical for SSR correctness
@@ -217,16 +241,8 @@ async function renderPage(
   const app = createSSRApp({ render: () => h(RouterView) })
   app.provide(DATA_KEY, data)
 
-  // ── Vue Router warning fix ────────────────────────────────────────────────
-  // createMemoryHistory() initialises its location to '/'.  When the router
-  // is constructed it performs an internal navigation to that initial location.
-  // If the only registered route is e.g. '/about', no match is found and
-  // Vue Router emits a warning even though the subsequent router.push('/about')
-  // succeeds perfectly.
-  //
-  // Fix: call history.replace(url) BEFORE constructing the router.  The router
-  // then sees the correct initial location and its startup navigation succeeds
-  // without warnings.  No separate router.push() is required.
+  // Initialise history at the request URL before creating the router so its
+  // startup navigation resolves immediately without a "[Vue Router warn]".
   const memHistory = createMemoryHistory()
   memHistory.replace(url)
 
@@ -236,11 +252,11 @@ async function renderPage(
   })
   app.use(router)
 
-  // router.isReady() resolves once the initial navigation (to `url`) completes.
   await router.isReady()
 
-  // renderToWebStream streams body chunks as Uint8Array — lower TTFB vs
-  // renderToString (which buffers the entire body before responding).
+  // Dev: buffered string — works correctly inside @hono/vite-dev-server.
+  // Prod: streaming — flushes <head> to the browser before <body> is ready.
+  if (dev) return renderToString(app)
   return renderToWebStream(app)
 }
 
@@ -389,10 +405,18 @@ export function createVono(config: VonoOptions): VonoApp {
       config.htmlAttrs,
     )
 
-    // Render the body asynchronously while the head is already on the wire
-    const bodyStream = await renderPage(route, data, pathname, params, config.layout)
-    const stream     = buildResponseStream(head, bodyStream, tail)
+    const body = await renderPage(route, data, pathname, params, config.layout, isDev)
 
+    // Dev: body is a plain string — return a normal buffered HTML response.
+    //   @hono/vite-dev-server cannot flush a ReadableStream through Vite's
+    //   Connect pipeline; using c.html() avoids the hanging-connection issue.
+    if (isDev) {
+      return c.html(head + (body as string) + tail, 200)
+    }
+
+    // Production: body is a ReadableStream — stream head + body + tail for
+    // the lowest possible TTFB.
+    const stream = buildResponseStream(head, body as ReadableStream<Uint8Array>, tail)
     return c.body(stream, 200, {
       'Content-Type':           'text/html; charset=UTF-8',
       'Transfer-Encoding':      'chunked',

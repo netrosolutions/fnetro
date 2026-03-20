@@ -92,14 +92,6 @@ const postsApi = defineApiRoute('/api/posts', (app) => {
 })
 
 const statsApi = defineApiRoute('/api/stats', (app) => {
-  app.get('/', (_c) => c.json({
-    totalUsers: 4200,
-    totalPosts: POSTS.length,
-    totalViews: POSTS.reduce((s, p) => s + p.views, 0),
-  }))
-})
-// (Fix the accidental `c` → use the handler param)
-const statsApiFixed = defineApiRoute('/api/stats', (app) => {
   app.get('/', (c) => c.json({
     totalUsers: 4200,
     totalPosts: POSTS.length,
@@ -263,7 +255,7 @@ export { default as NotFoundPage } from './pages/404.vue'
 
 export const routes = [
   postsApi,
-  statsApiFixed,
+  statsApi,
   homePage,
   blogListPage,
   blogPostPage,
